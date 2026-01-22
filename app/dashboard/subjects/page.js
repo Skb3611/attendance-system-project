@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { subjectSchema } from '@/lib/validations';
+import { z } from 'zod';
 
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState([]);
@@ -52,6 +54,9 @@ export default function SubjectsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Client-side validation
+      subjectSchema.parse(formData);
+
       const token = localStorage.getItem('token');
       const res = await fetch('/api/admin/subject', {
         method: 'POST',
@@ -72,7 +77,11 @@ export default function SubjectsPage() {
       setFormData({ subjectCode: '', subjectName: '', classId: '', teacherId: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.message || 'Failed to create subject');
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error(error.message || 'Failed to create subject');
+      }
     }
   };
 

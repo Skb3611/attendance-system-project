@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashPassword, verifyPassword, generateToken, getUserFromToken, getAuthToken } from '@/lib/auth';
+import { 
+  loginSchema, 
+  classSchema, 
+  teacherSchema, 
+  studentSchema, 
+  subjectSchema, 
+  timetableSchema, 
+  attendanceSchema 
+} from '@/lib/validations';
+import { z } from 'zod';
 
 // Auth Middleware
 async function authenticate(request, requiredRole = null) {
@@ -24,7 +34,8 @@ async function authenticate(request, requiredRole = null) {
 // POST /api/auth/login
 async function handleLogin(request) {
   try {
-    const { email, password } = await request.json();
+    const body = await request.json();
+    const { email, password } = await loginSchema.parseAsync(body);
 
     const user = await prisma.user.findUnique({
       where: { email },
@@ -47,6 +58,9 @@ async function handleLogin(request) {
 
     return NextResponse.json({ token, user: userWithoutPassword });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -70,12 +84,32 @@ async function handleCreateClass(request) {
   }
 
   try {
-    const { className, division, academicYear } = await request.json();
+    const body = await request.json();
+    const { className, division, academicYear } = await classSchema.parseAsync(body);
+    
+    // Check for existing class
+    const existingClass = await prisma.class.findUnique({
+      where: {
+        className_division_academicYear: {
+          className,
+          division,
+          academicYear
+        }
+      }
+    });
+
+    if (existingClass) {
+      return NextResponse.json({ error: 'Class already exists' }, { status: 400 });
+    }
+
     const classData = await prisma.class.create({
       data: { className, division, academicYear },
     });
     return NextResponse.json(classData);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+    }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
@@ -110,8 +144,15 @@ async function handleCreateTeacher(request) {
   }
 
   try {
-    const { name, email, password, department } = await request.json();
+    const body = await request.json();
+    const { name, email, password, department } = await teacherSchema.parseAsync(body);
     
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
+    }
+
     const hashedPwd = await hashPassword(password);
     const user = await prisma.user.create({
       data: {
@@ -129,6 +170,9 @@ async function handleCreateTeacher(request) {
     const { password: _, ...userWithoutPassword } = user;
     return NextResponse.json(userWithoutPassword);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+    }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
@@ -165,8 +209,25 @@ async function handleCreateStudent(request) {
   }
 
   try {
-    const { name, email, password, rollNo, classId } = await request.json();
+    const body = await request.json();
+    const { name, email, password, rollNo, classId } = await studentSchema.parseAsync(body);
     
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
+    }
+    
+    // Check for roll number duplication in class
+    const existingStudent = await prisma.student.findUnique({
+      where: {
+        rollNo_classId: { rollNo, classId }
+      }
+    });
+    if (existingStudent) {
+      return NextResponse.json({ error: 'Student with this roll number already exists in this class' }, { status: 400 });
+    }
+
     const hashedPwd = await hashPassword(password);
     const user = await prisma.user.create({
       data: {
@@ -188,6 +249,9 @@ async function handleCreateStudent(request) {
     const { password: _, ...userWithoutPassword } = user;
     return NextResponse.json(userWithoutPassword);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+    }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
@@ -223,7 +287,20 @@ async function handleCreateSubject(request) {
   }
 
   try {
-    const { subjectCode, subjectName, classId, teacherId } = await request.json();
+    const body = await request.json();
+    const { subjectCode, subjectName, classId, teacherId } = await subjectSchema.parseAsync(body);
+    
+    // Check duplication
+    const existingSubject = await prisma.subject.findUnique({
+      where: {
+        subjectCode_classId: { subjectCode, classId }
+      }
+    });
+    
+    if (existingSubject) {
+      return NextResponse.json({ error: 'Subject code already exists for this class' }, { status: 400 });
+    }
+
     const subject = await prisma.subject.create({
       data: { subjectCode, subjectName, classId, teacherId },
       include: {
@@ -235,6 +312,9 @@ async function handleCreateSubject(request) {
     });
     return NextResponse.json(subject);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+    }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
@@ -275,7 +355,74 @@ async function handleCreateTimetable(request) {
   }
 
   try {
-    const { classId, subjectId, teacherId, day, startTime, endTime } = await request.json();
+    const body = await request.json();
+    const { classId, subjectId, teacherId, day, startTime, endTime } = await timetableSchema.parseAsync(body);
+    
+    // Check for overlaps for the Class
+    // Overlap condition: (StartA < EndB) and (EndA > StartB)
+    const classOverlap = await prisma.timetable.findFirst({
+      where: {
+        classId,
+        day,
+        OR: [
+          {
+            AND: [
+              { startTime: { lte: startTime } },
+              { endTime: { gt: startTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { lt: endTime } },
+              { endTime: { gte: endTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { gte: startTime } },
+              { endTime: { lte: endTime } }
+            ]
+          }
+        ]
+      }
+    });
+
+    if (classOverlap) {
+      return NextResponse.json({ error: 'Timetable overlap detected for this class' }, { status: 400 });
+    }
+
+    // Check for overlaps for the Teacher
+    const teacherOverlap = await prisma.timetable.findFirst({
+      where: {
+        teacherId,
+        day,
+        OR: [
+          {
+            AND: [
+              { startTime: { lte: startTime } },
+              { endTime: { gt: startTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { lt: endTime } },
+              { endTime: { gte: endTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { gte: startTime } },
+              { endTime: { lte: endTime } }
+            ]
+          }
+        ]
+      }
+    });
+
+    if (teacherOverlap) {
+      return NextResponse.json({ error: 'Timetable overlap detected for this teacher' }, { status: 400 });
+    }
+
     const timetable = await prisma.timetable.create({
       data: { classId, subjectId, teacherId, day, startTime, endTime },
       include: {
@@ -286,6 +433,9 @@ async function handleCreateTimetable(request) {
     });
     return NextResponse.json(timetable);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+    }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
@@ -332,7 +482,8 @@ async function handleMarkAttendance(request) {
   }
 
   try {
-    const { studentId, subjectId, date, status } = await request.json();
+    const body = await request.json();
+    const { studentId, subjectId, date, status } = await attendanceSchema.parseAsync(body);
     const teacherId = auth.user.teacher.id;
 
     const attendanceDate = new Date(date);
@@ -361,6 +512,9 @@ async function handleMarkAttendance(request) {
     });
     return NextResponse.json(attendance);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+    }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
@@ -413,12 +567,12 @@ async function handleGetAttendancePercentage(request) {
       return NextResponse.json({ error: 'studentId required' }, { status: 400 });
     }
 
-    const attendance = await prisma.attendance.findMany({
-      where: { studentId },
-    });
+    // Optimization: Use count instead of finding many
+    const [total, present] = await Promise.all([
+      prisma.attendance.count({ where: { studentId } }),
+      prisma.attendance.count({ where: { studentId, status: 'PRESENT' } })
+    ]);
 
-    const total = attendance.length;
-    const present = attendance.filter((a) => a.status === 'PRESENT').length;
     const percentage = total > 0 ? (present / total) * 100 : 0;
 
     return NextResponse.json({
@@ -443,11 +597,13 @@ async function handleGetDefaulters(request) {
     const { searchParams } = new URL(request.url);
     const threshold = parseInt(searchParams.get('threshold') || '75');
 
+    // Optimization: Select only necessary fields
     const students = await prisma.student.findMany({
       include: {
-        user: true,
-        class: true,
-        attendances: true,
+        user: { select: { name: true } },
+        class: { select: { className: true, division: true } },
+        // We still need attendances to calculate, but we can select only status
+        attendances: { select: { status: true } },
       },
     });
 
@@ -529,12 +685,13 @@ async function handleGetDashboardStats(request) {
       });
     } else if (auth.user.role === 'STUDENT') {
       const studentId = auth.user.student.id;
-      const attendance = await prisma.attendance.findMany({
-        where: { studentId },
-      });
-
-      const total = attendance.length;
-      const present = attendance.filter((a) => a.status === 'PRESENT').length;
+      
+      // Optimization: Use count queries
+      const [total, present] = await Promise.all([
+        prisma.attendance.count({ where: { studentId } }),
+        prisma.attendance.count({ where: { studentId, status: 'PRESENT' } })
+      ]);
+      
       const percentage = total > 0 ? (present / total) * 100 : 0;
 
       return NextResponse.json({

@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { timetableSchema } from '@/lib/validations';
+import { z } from 'zod';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -79,6 +81,9 @@ export default function TimetablePage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Client-side validation
+      timetableSchema.parse(formData);
+
       const token = localStorage.getItem('token');
       const res = await fetch('/api/timetable', {
         method: 'POST',
@@ -99,7 +104,11 @@ export default function TimetablePage() {
       setFormData({ classId: '', subjectId: '', teacherId: '', day: '', startTime: '', endTime: '' });
       fetchTimetable();
     } catch (error) {
-      toast.error(error.message || 'Failed to create timetable entry');
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error(error.message || 'Failed to create timetable entry');
+      }
     }
   };
 

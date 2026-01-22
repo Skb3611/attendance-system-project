@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { studentSchema } from '@/lib/validations';
+import { z } from 'zod';
 
 export default function StudentsPage() {
   const [students, setStudents] = useState([]);
@@ -49,6 +51,9 @@ export default function StudentsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Client-side validation
+      studentSchema.parse(formData);
+
       const token = localStorage.getItem('token');
       const res = await fetch('/api/admin/student', {
         method: 'POST',
@@ -69,7 +74,11 @@ export default function StudentsPage() {
       setFormData({ name: '', email: '', password: '', rollNo: '', classId: '' });
       fetchData();
     } catch (error) {
-      toast.error(error.message || 'Failed to create student');
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error(error.message || 'Failed to create student');
+      }
     }
   };
 

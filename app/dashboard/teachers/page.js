@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Plus, Mail, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { teacherSchema } from '@/lib/validations';
+import { z } from 'zod';
 
 export default function TeachersPage() {
   const [teachers, setTeachers] = useState([]);
@@ -43,6 +45,9 @@ export default function TeachersPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Client-side validation
+      teacherSchema.parse(formData);
+
       const token = localStorage.getItem('token');
       const res = await fetch('/api/admin/teacher', {
         method: 'POST',
@@ -63,7 +68,11 @@ export default function TeachersPage() {
       setFormData({ name: '', email: '', password: '', department: '' });
       fetchTeachers();
     } catch (error) {
-      toast.error(error.message || 'Failed to create teacher');
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error(error.message || 'Failed to create teacher');
+      }
     }
   };
 

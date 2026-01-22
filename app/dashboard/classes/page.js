@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Users, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
+import { classSchema } from '@/lib/validations';
+import { z } from 'zod';
 
 export default function ClassesPage() {
   const [classes, setClasses] = useState([]);
@@ -41,6 +43,9 @@ export default function ClassesPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Client-side validation
+      classSchema.parse(formData);
+
       const token = localStorage.getItem('token');
       const res = await fetch('/api/admin/class', {
         method: 'POST',
@@ -61,7 +66,11 @@ export default function ClassesPage() {
       setFormData({ className: '', division: '', academicYear: '2024-25' });
       fetchClasses();
     } catch (error) {
-      toast.error(error.message || 'Failed to create class');
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error(error.message || 'Failed to create class');
+      }
     }
   };
 

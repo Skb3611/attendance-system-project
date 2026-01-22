@@ -9,6 +9,8 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Calendar } from 'lucide-react';
+import { attendanceSchema } from '@/lib/validations';
+import { z } from 'zod';
 
 export default function AttendancePage() {
   const [subjects, setSubjects] = useState([]);
@@ -96,26 +98,39 @@ export default function AttendancePage() {
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
-      const promises = students.map((student) =>
+      
+      // Prepare and validate data
+      const attendanceRequests = students.map((student) => {
+        const data = {
+          studentId: student.id,
+          subjectId: selectedSubject,
+          date: selectedDate,
+          status: attendance[student.id] ? 'PRESENT' : 'ABSENT',
+        };
+        // Validate individual record
+        attendanceSchema.parse(data);
+        return data;
+      });
+
+      const promises = attendanceRequests.map((data) =>
         fetch('/api/attendance', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            studentId: student.id,
-            subjectId: selectedSubject,
-            date: selectedDate,
-            status: attendance[student.id] ? 'PRESENT' : 'ABSENT',
-          }),
+          body: JSON.stringify(data),
         })
       );
 
       await Promise.all(promises);
       toast.success('Attendance saved successfully');
     } catch (error) {
-      toast.error('Failed to save attendance');
+      if (error instanceof z.ZodError) {
+        toast.error(`Validation error: ${error.errors[0].message}`);
+      } else {
+        toast.error('Failed to save attendance');
+      }
     } finally {
       setSaving(false);
     }

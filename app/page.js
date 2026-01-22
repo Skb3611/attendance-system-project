@@ -7,14 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { GraduationCap, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
+
+import { loginSchema } from '@/lib/validations';
+import { z } from 'zod';
 
 export default function Home() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { toast } = useToast();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -28,6 +30,9 @@ export default function Home() {
     setLoading(true);
 
     try {
+      // Client-side validation
+      loginSchema.parse({ email, password });
+
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -37,29 +42,22 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast({
-          title: 'Error',
-          description: data.error || 'Login failed',
-          variant: 'destructive',
-        });
+        toast.error(data.error || 'Login failed');
         return;
       }
 
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       
-      toast({
-        title: 'Success',
-        description: 'Logged in successfully',
-      });
+      toast.success('Logged in successfully');
 
       router.push('/dashboard');
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'An error occurred',
-        variant: 'destructive',
-      });
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      } else {
+        toast.error('An error occurred');
+      }
     } finally {
       setLoading(false);
     }
@@ -114,12 +112,6 @@ export default function Home() {
               )}
             </Button>
           </form>
-          <div className="mt-6 text-sm text-muted-foreground space-y-1">
-            <p className="font-semibold">Demo Credentials:</p>
-            <p>Admin: admin@school.com / admin123</p>
-            <p>Teacher: teacher@school.com / teacher123</p>
-            <p>Student: student@school.com / student123</p>
-          </div>
         </CardContent>
       </Card>
     </div>

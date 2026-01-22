@@ -20,7 +20,6 @@ import {
   FileText,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Toaster } from '@/components/ui/sonner';
 
 export default function DashboardLayout({ children }) {
   const [user, setUser] = useState(null);
@@ -175,7 +174,6 @@ export default function DashboardLayout({ children }) {
           {children}
         </main>
       </div>
-      <Toaster />
     </div>
   );
 }
