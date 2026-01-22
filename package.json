@@ -11,6 +11,7 @@
     },
     "dependencies": {
         "@hookform/resolvers": "^5.1.1",
+        "@prisma/client": "^5.19.0",
         "@radix-ui/react-accordion": "^1.2.11",
         "@radix-ui/react-alert-dialog": "^1.1.14",
         "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -40,12 +41,14 @@
         "@radix-ui/react-tooltip": "^1.2.7",
         "@tanstack/react-table": "^8.21.3",
         "axios": "^1.10.0",
+        "bcryptjs": "^2.4.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
         "date-fns": "^4.1.0",
         "embla-carousel-react": "^8.6.0",
         "input-otp": "^1.4.2",
+        "jsonwebtoken": "^9.0.2",
         "lucide-react": "^0.516.0",
         "mongodb": "^6.6.0",
         "next": "14.2.3",
@@ -64,9 +67,12 @@
         "zod": "^3.25.67"
     },
     "devDependencies": {
+        "@types/bcryptjs": "^2.4.6",
+        "@types/jsonwebtoken": "^9.0.7",
         "autoprefixer": "^10.4.19",
         "globals": "^16.2.0",
         "postcss": "^8",
+        "prisma": "^5.19.0",
         "tailwindcss": "^3.4.1"
     },
     "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
